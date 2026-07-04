@@ -4,9 +4,11 @@ import com.wallet.account_service.DTO.AccountResponse;
 import com.wallet.account_service.DTO.CreateAccountRequest;
 import com.wallet.account_service.Entity.Account;
 import com.wallet.account_service.Exception.AccountNotFoundException;
+import com.wallet.account_service.Exception.InsufficientFundException;
 import com.wallet.account_service.Repository.AccountRepository;
 import org.springframework.stereotype.Service;
 
+import javax.naming.InsufficientResourcesException;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -48,6 +50,26 @@ public class AccountServiceImpl implements AccountService{
         return findAccountOrThrow(accountId).getBalance();
     }
 
+    @Override
+    public void debit(Long accountId, BigDecimal amount) {
+        Account account = findAccountOrThrow(accountId);
+        if(account.getBalance().compareTo(amount) <= 0){
+            throw new InsufficientFundException("Account " + accountId + " has insufficient funds");
+        }
+
+        account.setBalance(account.getBalance().subtract(amount));
+        account.setUpdatedAt(LocalDateTime.now());
+        accountRepository.save(account);
+    }
+
+    @Override
+    public void credit(Long accountId, BigDecimal amount) {
+        Account account = findAccountOrThrow(accountId);
+        account.setBalance(account.getBalance().add(amount));
+        account.setUpdatedAt(LocalDateTime.now());
+        accountRepository.save(account);
+    }
+
     private Account findAccountOrThrow(Long id) {
         return accountRepository.findById(id)
                 .orElseThrow(() -> new AccountNotFoundException("Account with id: " + id + " not found"));
@@ -66,4 +88,6 @@ public class AccountServiceImpl implements AccountService{
 
         return accountResponse;
     }
+
+
 }

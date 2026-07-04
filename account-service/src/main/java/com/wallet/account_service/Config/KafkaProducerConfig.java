@@ -1,10 +1,9 @@
-package com.wallet.transaction_service.Config;
+package com.wallet.account_service.Config;
 
-import com.wallet.transaction_service.Event.CreditRequestedEvent;
-import com.wallet.transaction_service.Event.TransactionInitiatedEvent;
+import com.wallet.account_service.Event.CreditCompletedEvent;
+import com.wallet.account_service.Event.DebitCompletedEvent;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -31,26 +30,23 @@ public class KafkaProducerConfig {
         return config;
     }
 
-
     @Bean
-    public ProducerFactory<String, TransactionInitiatedEvent> producerFactory() {
+    public ProducerFactory<String, DebitCompletedEvent> producerFactory() {
         return new DefaultKafkaProducerFactory<>(baseConfig());
     }
 
     @Bean
-    public KafkaTemplate<String, TransactionInitiatedEvent> kafkaTemplate() {
+    public KafkaTemplate<String, DebitCompletedEvent> kafkaTemplate() {
         return new KafkaTemplate<>(producerFactory());
     }
 
-
     @Bean
-    public ProducerFactory<String, CreditRequestedEvent> creditRequestedProducerFactory() {
+    public ProducerFactory<String, CreditCompletedEvent> creditCompletedProducerFactory() {
         return new DefaultKafkaProducerFactory<>(baseConfig());
     }
 
     @Bean
-    @Qualifier("creditRequestedKafkaTemplate")
-    public KafkaTemplate<String, CreditRequestedEvent> creditRequestedKafkaTemplate() {
-        return new KafkaTemplate<>(creditRequestedProducerFactory());
+    public KafkaTemplate<String, CreditCompletedEvent> creditCompletedKafkaTemplate() {
+        return new KafkaTemplate<>(creditCompletedProducerFactory());
     }
 }

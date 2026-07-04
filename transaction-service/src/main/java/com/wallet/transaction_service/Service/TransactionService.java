@@ -8,4 +8,5 @@ import org.springframework.stereotype.Service;
 public interface TransactionService {
     TransactionResponse createTransfer(TransactionRequest transactionRequest);
     TransactionResponse getTransfer(Long id);
+    void markCompleted(Long transactionId);
 }

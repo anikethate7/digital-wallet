@@ -56,6 +56,14 @@ public class TransactionServiceImpl implements TransactionService {
     }
 
     @Override
+    public void markCompleted(Long transactionId) {
+        Transaction transaction = transactionRepository.findById(transactionId)
+                .orElseThrow(() -> new TransactionNotFoundException("Transaction not found"));
+        transaction.setStatus("COMPLETED");
+        transactionRepository.save(transaction);
+    }
+
+    @Override
     public TransactionResponse getTransfer(Long id) {
         Transaction transaction = transactionRepository.findById(id).orElseThrow(() -> new TransactionNotFoundException("Transfer not found"));
         return toResponse(transaction);
