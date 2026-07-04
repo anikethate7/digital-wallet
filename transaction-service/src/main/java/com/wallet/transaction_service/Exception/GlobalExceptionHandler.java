@@ -20,4 +20,15 @@ public class GlobalExceptionHandler {
         response.put("message", e.getMessage());
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
     }
+
+
+    @ExceptionHandler(InsufficientFundException.class)
+    public ResponseEntity<Map<String, Object>> handleInsufficientFundException(InsufficientFundException e) {
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("timestamp", LocalDateTime.now());
+        response.put("status", HttpStatus.BAD_REQUEST.value());
+        response.put("message", e.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+
+    }
 }

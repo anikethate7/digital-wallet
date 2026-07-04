@@ -4,10 +4,12 @@ server:
 spring:
   application:
     name: transaction-service
+
   datasource:
     url: jdbc:mysql://localhost:3306/digital-wallet
     username: root
     password: root
+
   jpa:
     hibernate:
       ddl-auto: update
@@ -15,6 +17,19 @@ spring:
     properties:
       hibernate:
         format_sql: true
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: wallet-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
 eureka:
   client:

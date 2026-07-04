@@ -1,25 +1,44 @@
 package com.wallet.transaction_service.Service;
 
+import com.wallet.transaction_service.Client.AccountClient;
 import com.wallet.transaction_service.DTO.TransactionRequest;
 import com.wallet.transaction_service.DTO.TransactionResponse;
 import com.wallet.transaction_service.Entity.Transaction;
+import com.wallet.transaction_service.Event.TransactionInitiatedEvent;
+import com.wallet.transaction_service.Exception.InsufficientFundException;
 import com.wallet.transaction_service.Exception.TransactionNotFoundException;
 import com.wallet.transaction_service.Repository.TransactionRepository;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Service
 public class TransactionServiceImpl implements TransactionService {
 
-    final TransactionRepository transactionRepository;
+    private final TransactionRepository transactionRepository;
+    private final AccountClient accountClient;
+    private final KafkaTemplate<String, TransactionInitiatedEvent> kafkaTemplate;
 
-    public TransactionServiceImpl(TransactionRepository transactionRepository) {
+    public TransactionServiceImpl(TransactionRepository transactionRepository,
+                                  AccountClient accountClient,
+                                  KafkaTemplate<String, TransactionInitiatedEvent> kafkaTemplate) {
         this.transactionRepository = transactionRepository;
+        this.accountClient = accountClient;
+        this.kafkaTemplate = kafkaTemplate;
     }
 
     @Override
     public TransactionResponse createTransfer(TransactionRequest transactionRequest) {
+        BigDecimal balance = accountClient.getBalance(transactionRequest.getFromAccountId());
+
+        if( balance.compareTo(transactionRequest.getAmount()) < 0){
+            throw new InsufficientFundException(
+                    "Account " + transactionRequest.getFromAccountId() + " has insufficient funds for this transfer"
+            );
+        }
+
         Transaction transaction = new Transaction();
         transaction.setFromAccountId(transactionRequest.getFromAccountId());
         transaction.setToAccountId(transactionRequest.getToAccountId());
@@ -29,8 +48,11 @@ public class TransactionServiceImpl implements TransactionService {
 
         Transaction saved = transactionRepository.save(transaction);
 
+        TransactionInitiatedEvent event = new TransactionInitiatedEvent(
+                saved.getId(), saved.getFromAccountId(), saved.getToAccountId(), saved.getAmount()
+        );
+        kafkaTemplate.send("transfer-initiated", event);
         return toResponse(saved);
-
     }
 
     @Override
