@@ -18,8 +18,8 @@ public class TransactionController {
     }
 
     @PostMapping
-    public ResponseEntity<TransactionResponse> createTransaction(@RequestBody TransactionRequest transactionRequest){
-        return ResponseEntity.accepted().body(transactionService.createTransfer(transactionRequest));
+    public ResponseEntity<TransactionResponse> createTransaction(@RequestBody TransactionRequest transactionRequest, @RequestHeader("Idempotency-Key") String idempotencyKey){
+        return ResponseEntity.accepted().body(transactionService.createTransfer(transactionRequest, idempotencyKey));
     }
 
     @GetMapping("/{Id}")

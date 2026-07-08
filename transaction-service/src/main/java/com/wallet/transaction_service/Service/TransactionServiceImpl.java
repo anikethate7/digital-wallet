@@ -5,14 +5,17 @@ import com.wallet.transaction_service.DTO.TransactionRequest;
 import com.wallet.transaction_service.DTO.TransactionResponse;
 import com.wallet.transaction_service.Entity.Transaction;
 import com.wallet.transaction_service.Event.TransactionInitiatedEvent;
+import com.wallet.transaction_service.Exception.IdempotencyKeyReusedException;
 import com.wallet.transaction_service.Exception.InsufficientFundException;
 import com.wallet.transaction_service.Exception.TransactionNotFoundException;
 import com.wallet.transaction_service.Repository.TransactionRepository;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
+import javax.swing.text.html.Option;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Optional;
 
 @Service
 public class TransactionServiceImpl implements TransactionService {
@@ -30,7 +33,25 @@ public class TransactionServiceImpl implements TransactionService {
     }
 
     @Override
-    public TransactionResponse createTransfer(TransactionRequest transactionRequest) {
+    public TransactionResponse createTransfer(TransactionRequest transactionRequest, String idempotencyKey) {
+        Optional<Transaction> existing = transactionRepository.findByIdempotencyKey(idempotencyKey);
+
+        if (existing.isPresent()) {
+            Transaction existingTransaction = existing.get();
+
+            boolean sameRequest =
+                    existingTransaction.getFromAccountId().equals(transactionRequest.getFromAccountId()) &&
+                            existingTransaction.getToAccountId().equals(transactionRequest.getToAccountId()) &&
+                            existingTransaction.getAmount().compareTo(transactionRequest.getAmount()) == 0;
+
+            if (sameRequest) {
+                return toResponse(existingTransaction);
+            } else {
+                throw new IdempotencyKeyReusedException(
+                        "Idempotency key " + idempotencyKey + " was already used with different request data");
+            }
+        }
+
         BigDecimal balance = accountClient.getBalance(transactionRequest.getFromAccountId());
 
         if( balance.compareTo(transactionRequest.getAmount()) < 0){
@@ -40,6 +61,7 @@ public class TransactionServiceImpl implements TransactionService {
         }
 
         Transaction transaction = new Transaction();
+        transaction.setIdempotencyKey(idempotencyKey);
         transaction.setFromAccountId(transactionRequest.getFromAccountId());
         transaction.setToAccountId(transactionRequest.getToAccountId());
         transaction.setAmount(transactionRequest.getAmount());

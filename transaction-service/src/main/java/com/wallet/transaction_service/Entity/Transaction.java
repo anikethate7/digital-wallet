@@ -14,7 +14,10 @@ public class Transaction {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(unique = true)
     private String idempotencyKey;
+
     private Long fromAccountId;
     private Long toAccountId;
     private BigDecimal amount;
