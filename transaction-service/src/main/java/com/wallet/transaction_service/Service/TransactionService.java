@@ -9,4 +9,5 @@ public interface TransactionService {
     TransactionResponse createTransfer(TransactionRequest transactionRequest);
     TransactionResponse getTransfer(Long id);
     void markCompleted(Long transactionId);
+    public void markFailed(Long transactionId);
 }

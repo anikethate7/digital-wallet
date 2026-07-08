@@ -19,7 +19,7 @@ public class TransactionController {
 
     @PostMapping
     public ResponseEntity<TransactionResponse> createTransaction(@RequestBody TransactionRequest transactionRequest){
-        return ResponseEntity.ok(transactionService.createTransfer(transactionRequest));
+        return ResponseEntity.accepted().body(transactionService.createTransfer(transactionRequest));
     }
 
     @GetMapping("/{Id}")

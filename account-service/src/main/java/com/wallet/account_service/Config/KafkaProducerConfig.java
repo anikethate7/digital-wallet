@@ -1,7 +1,9 @@
 package com.wallet.account_service.Config;
 
 import com.wallet.account_service.Event.CreditCompletedEvent;
+import com.wallet.account_service.Event.CreditFailedEvent;
 import com.wallet.account_service.Event.DebitCompletedEvent;
+import com.wallet.account_service.Event.DebitReversedEvent;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.beans.factory.annotation.Value;
@@ -48,5 +50,25 @@ public class KafkaProducerConfig {
     @Bean
     public KafkaTemplate<String, CreditCompletedEvent> creditCompletedKafkaTemplate() {
         return new KafkaTemplate<>(creditCompletedProducerFactory());
+    }
+
+    @Bean
+    public ProducerFactory<String, CreditFailedEvent> creditFailedProducerFactory() {
+        return new DefaultKafkaProducerFactory<>(baseConfig());
+    }
+
+    @Bean
+    public KafkaTemplate<String, CreditFailedEvent> creditFailedKafkaTemplate() {
+        return new KafkaTemplate<>(creditFailedProducerFactory());
+    }
+
+    @Bean
+    public ProducerFactory<String, DebitReversedEvent> debitReversedProducerFactory() {
+        return new DefaultKafkaProducerFactory<>(baseConfig());
+    }
+
+    @Bean
+    public KafkaTemplate<String, DebitReversedEvent> debitReversedKafkaTemplate() {
+        return new KafkaTemplate<>(debitReversedProducerFactory());
     }
 }

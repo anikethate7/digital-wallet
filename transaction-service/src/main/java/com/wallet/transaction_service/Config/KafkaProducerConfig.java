@@ -1,5 +1,6 @@
 package com.wallet.transaction_service.Config;
 
+import com.wallet.transaction_service.Event.CompensateDebitEvent;
 import com.wallet.transaction_service.Event.CreditRequestedEvent;
 import com.wallet.transaction_service.Event.TransactionInitiatedEvent;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -52,5 +53,15 @@ public class KafkaProducerConfig {
     @Qualifier("creditRequestedKafkaTemplate")
     public KafkaTemplate<String, CreditRequestedEvent> creditRequestedKafkaTemplate() {
         return new KafkaTemplate<>(creditRequestedProducerFactory());
+    }
+
+    @Bean
+    public ProducerFactory<String, CompensateDebitEvent> compensateDebitProducerFactory() {
+        return new DefaultKafkaProducerFactory<>(baseConfig());
+    }
+
+    @Bean
+    public KafkaTemplate<String, CompensateDebitEvent> compensateDebitKafkaTemplate() {
+        return new KafkaTemplate<>(compensateDebitProducerFactory());
     }
 }

@@ -34,4 +34,10 @@ public class AccountController {
     public ResponseEntity<BigDecimal> getBalance(@PathVariable Long id) {
         return ResponseEntity.ok(accountService.getBalance(id));
     }
+
+    @PatchMapping("/{id}/freeze")
+    public ResponseEntity<AccountResponse> freezeAccount(@PathVariable Long id) {
+        accountService.freezeAccount(id);
+        return ResponseEntity.noContent().build();
+    }
 }

@@ -12,4 +12,6 @@ public interface AccountService {
     BigDecimal getBalance(Long accountId);
     void debit(Long accountId, BigDecimal amount);
     void credit(Long accountId, BigDecimal amount);
+    void freezeAccount(Long accountId);
+    void reverseDebit(Long accountId, BigDecimal amount);
 }

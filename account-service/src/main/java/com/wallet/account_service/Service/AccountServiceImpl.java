@@ -3,6 +3,7 @@ package com.wallet.account_service.Service;
 import com.wallet.account_service.DTO.AccountResponse;
 import com.wallet.account_service.DTO.CreateAccountRequest;
 import com.wallet.account_service.Entity.Account;
+import com.wallet.account_service.Exception.AccountFrozenException;
 import com.wallet.account_service.Exception.AccountNotFoundException;
 import com.wallet.account_service.Exception.InsufficientFundException;
 import com.wallet.account_service.Repository.AccountRepository;
@@ -64,6 +65,27 @@ public class AccountServiceImpl implements AccountService{
 
     @Override
     public void credit(Long accountId, BigDecimal amount) {
+        Account account = findAccountOrThrow(accountId);
+
+        if ("FROZEN".equals(account.getStatus())) {
+            throw new AccountFrozenException("Account " + accountId + " is frozen, cannot credit");
+        }
+
+        account.setBalance(account.getBalance().add(amount));
+        account.setUpdatedAt(LocalDateTime.now());
+        accountRepository.save(account);
+    }
+
+    @Override
+    public void freezeAccount(Long accountId) {
+        Account account = findAccountOrThrow(accountId);
+        account.setStatus("FROZEN");
+        account.setUpdatedAt(LocalDateTime.now());
+        accountRepository.save(account);
+    }
+
+    @Override
+    public void reverseDebit(Long accountId, BigDecimal amount) {
         Account account = findAccountOrThrow(accountId);
         account.setBalance(account.getBalance().add(amount));
         account.setUpdatedAt(LocalDateTime.now());
