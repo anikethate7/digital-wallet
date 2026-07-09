@@ -18,7 +18,6 @@ public class CreditCompletedListener {
 
     @KafkaListener(
             topics = "credit-completed",
-            groupId = "wallet-group",
             containerFactory = "creditCompletedKafkaListenerContainerFactory")
     public void handleCreditCompleted(CreditCompletedEvent event) {
         log.info("Received CreditCompletedEvent: transactionId={}, account={}, amount={}",

@@ -21,7 +21,6 @@ public class DebitCompletedListener {
 
     @KafkaListener(
             topics = "debit-completed",
-            groupId = "wallet-group",
             containerFactory = "debitCompletedKafkaListenerContainerFactory"
     )
     public void handleDebitCompleted(DebitCompletedEvent event) {
