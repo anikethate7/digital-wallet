@@ -31,9 +31,9 @@ public class AccountServiceImpl implements AccountService{
 
 
     @Override
-    public AccountResponse createAccount(CreateAccountRequest request) {
+    public AccountResponse createAccount(CreateAccountRequest request, Long userId) {
         Account account = new Account();
-        account.setUserId(request.getUserId());
+        account.setUserId(userId);
         account.setAccountType(request.getAccountType());
         account.setBalance(request.getInitialBalance());
         account.setCurrency(request.getCurrency());

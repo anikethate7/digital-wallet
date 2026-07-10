@@ -2,7 +2,6 @@ package com.wallet.account_service.Controller;
 
 import com.wallet.account_service.DTO.AccountResponse;
 import com.wallet.account_service.DTO.CreateAccountRequest;
-import com.wallet.account_service.Entity.Account;
 import com.wallet.account_service.Service.AccountService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -21,8 +20,11 @@ public class AccountController {
     }
 
     @PostMapping
-    public ResponseEntity<AccountResponse> createAccount(@RequestBody CreateAccountRequest request) {
-        return ResponseEntity.ok(accountService.createAccount(request));
+    public ResponseEntity<AccountResponse> createAccount(
+            @RequestBody CreateAccountRequest request,
+            jakarta.servlet.http.HttpServletRequest httpRequest) {
+        Long userId = (Long) httpRequest.getAttribute("userId");
+        return ResponseEntity.ok(accountService.createAccount(request, userId));
     }
 
     @GetMapping("/{id}")
