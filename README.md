@@ -1,236 +1,189 @@
 # Digital Wallet
 
-A microservices-based digital wallet application built with Spring Boot and Spring Cloud. This project demonstrates a scalable, distributed architecture for managing financial transactions and accounts with robust security and data consistency.
+A microservices-based digital wallet application built with Spring Boot and Spring Cloud. This repository demonstrates a scalable, event-driven architecture for managing user accounts, transactions, and ledger reconciliation using Kafka and Spring Cloud.
+
+Table of Contents
+- Project Overview
+- Architecture & Components
+- Technologies
+- Project Structure
+- Key Features
+- Prerequisites
+- Quick Start (Docker)
+- Run & Develop Services Locally
+- Configuration & Environment Variables
+- API Documentation
+- Database
+- Testing
+- Build & Release
+- Deployment
+- Troubleshooting
+- Contributing
+- License
+- Contact
+- Changelog
 
 ## Project Overview
 
-Digital Wallet is a comprehensive financial management system designed with microservices architecture. It provides services for account management, transaction handling, and ledger maintenance with event-driven communication, optimistic locking for concurrent operations, and scheduled reconciliation jobs.
+Digital Wallet is a modular financial management system composed of independent microservices. Each service owns its data and communicates via Kafka events for eventual consistency. The project emphasizes reliability (idempotency, optimistic locking, retries), observability (API docs), and secure access (Spring Security for the Account Service).
 
-## Architecture
+## Architecture & Components
 
-This project uses a **microservices architecture** with the following components:
+High-level components:
+- Account Service — user accounts, authentication, profile, balance management (Spring Security).
+- Transaction Service — processes payments, debits/credits, emits transaction events (Kafka producers/consumers).
+- Ledger Service — maintains financial ledger, scheduled reconciliation jobs.
+- Eureka Server — service discovery and registration.
+- Infrastructure — Zookeeper, Kafka, MySQL (per-service databases), Docker Compose for local orchestration.
 
-### Core Services
+## Technologies
 
-- **Account Service** - Manages user accounts, profiles, account information, and balance operations with Spring Security
-- **Transaction Service** - Handles financial transactions and payment processing with Kafka event listeners
-- **Ledger Service** - Maintains transaction ledger, financial records, and scheduled reconciliation jobs
-- **Eureka Server** - Service registry for microservice discovery
-
-### Technologies
-
-**Framework & Language:**
-- Java 17
-- Spring Boot 3.5.4
-- Spring Cloud 2025.0.0
-- Spring Security
-
-**Key Technologies:**
-- **Spring Data JPA** - ORM for database operations
-- **Spring Web** - REST API development
-- **Spring Security** - Authentication and authorization
-- **Netflix Eureka** - Service discovery
-- **Apache Kafka** - Event streaming and message broker with multiple consumer support
-- **MySQL** - Primary database
-- **Swagger/OpenAPI** - API documentation
-- **Lombok** - Boilerplate reduction
-- **Maven** - Dependency management
-
-**Infrastructure:**
-- Docker & Docker Compose
-- Zookeeper (Kafka coordination)
-- Kafka 7.5.0
+- Language & Frameworks: Java 17, Spring Boot 3.5.4, Spring Cloud 2025.0.0
+- Security: Spring Security
+- Messaging: Apache Kafka (7.5.0)
+- Database: MySQL 8+
+- Persistence: Spring Data JPA
+- API Docs: Swagger / OpenAPI
+- Build: Maven
+- Containerization: Docker, Docker Compose
+- Utilities: Lombok
 
 ## Project Structure
 
 ```
 digital-wallet/
-├── account-service/        # Account management microservice with Spring Security
-├── transaction-service/    # Transaction processing microservice with Kafka listeners
-├── ledger-service/        # Ledger and financial records service with reconciliation jobs
-├── eureka-server/         # Service discovery server
-└── docker-compose.yml     # Docker orchestration for local development
+├── account-service/        # Account management microservice
+├── transaction-service/    # Transaction processing microservice
+├── ledger-service/         # Ledger and financial records service
+├── eureka-server/          # Service discovery server
+└── docker-compose.yml      # Local orchestration
 ```
 
 ## Key Features
 
-### 🔐 Security
-- **Spring Security Integration** - Secured endpoints and authentication
-- Account-level security controls
-
-### 💰 Data Consistency & Reliability
-- **Optimistic Locking** - Prevents concurrent balance update conflicts with version-based detection
-- **Retry Mechanism** - Automatic retry logic (max 3 attempts) for handling concurrent modifications
-- **Idempotency Support** - Prevents duplicate transaction processing
-- **Concurrent Operation Handling** - Safe handling of simultaneous debit/credit operations
-
-### 📨 Event-Driven Architecture
-- **Kafka Event Streaming** - Asynchronous inter-service communication
-- **Multiple Consumer Support** - Independent consumers can process the same Kafka event
-- **Transaction Event Listeners** - Services react to transaction events in real-time
-
-### 🔄 Ledger Management
-- **Scheduled Reconciliation** - Automated ledger reconciliation jobs
-- **Transaction History** - Complete audit trail of all account activities
-- **Balance Tracking** - Real-time balance updates and verification
+- Security: Spring Security enabled for Account Service.
+- Event-driven: Kafka-based async communication between services.
+- Concurrency & Reliability:
+  - Optimistic locking on account balances (@Version).
+  - Idempotency keys to prevent duplicate transaction processing.
+  - Automatic retry logic for transient failures (configurable limits).
+- Ledger & Auditing:
+  - Persistent ledger with reconciliation jobs.
+  - Full transaction audit trail.
+- Scalability:
+  - Microservices scale independently.
+  - Multiple independent Kafka consumers supported.
 
 ## Prerequisites
 
 - Java 17+
 - Maven 3.6+
 - Docker & Docker Compose
-- MySQL 8.0+ (or use Docker)
+- MySQL 8.0+ (or use the Docker-provided MySQL)
 
-## Getting Started
+## Quick Start (Docker)
 
-### 1. Clone the Repository
+1. Clone the repository:
+   git clone https://github.com/anikethate7/digital-wallet.git
+   cd digital-wallet
 
-```bash
-git clone https://github.com/anikethate7/digital-wallet.git
-cd digital-wallet
-```
+2. Start infrastructure services:
+   docker-compose up -d
 
-### 2. Start Infrastructure with Docker Compose
+   This typically starts:
+   - Zookeeper (2181)
+   - Kafka broker (9092)
+   - MySQL (configured in docker-compose)
 
-```bash
-docker-compose up -d
-```
+3. Build the code:
+   mvn clean install
 
-This will start:
-- Zookeeper (port 2181)
-- Kafka (port 9092)
+4. Run services (examples):
+   # from repo root, to run a service:
+   cd account-service
+   mvn spring-boot:run
 
-### 3. Build the Services
+## Run & Develop Services Locally
 
-```bash
-mvn clean install
-```
+- Each service has its own application configuration (application.yml/properties).
+- To run multiple services, ensure each uses distinct ports.
+- Use the Eureka server URL in each service's config to register with service discovery.
+- Kafka brokers and Zookeeper must be reachable by configured bootstrap servers.
 
-### 4. Run Individual Services
+## Configuration & Environment Variables
 
-Each service can be run independently:
+Common properties to configure for each service:
+- spring.datasource.url / username / password — database connection
+- spring.kafka.bootstrap-servers — Kafka brokers
+- eureka.client.serviceUrl.defaultZone — Eureka server
+- server.port — service HTTP port
+- security.* — auth settings for Account Service
 
-```bash
-# Account Service (with Spring Security)
-cd account-service
-mvn spring-boot:run
-
-# Transaction Service (with Kafka listeners)
-cd ../transaction-service
-mvn spring-boot:run
-
-# Ledger Service (with reconciliation jobs)
-cd ../ledger-service
-mvn spring-boot:run
-
-# Eureka Server
-cd ../eureka-server
-mvn spring-boot:run
-```
+Provide environment-specific values in application-{profile}.yml or via environment variables (recommended for Docker).
 
 ## API Documentation
 
-Once the services are running, access the Swagger/OpenAPI documentation at:
+When running a service locally, Swagger/OpenAPI UI is available (if enabled). Example:
+- Account Service: http://localhost:<port>/swagger-ui.html
+- Transaction Service: http://localhost:<port>/swagger-ui.html
+- Ledger Service: http://localhost:<port>/swagger-ui.html
 
-- Account Service: `http://localhost:<port>/swagger-ui.html`
-- Transaction Service: `http://localhost:<port>/swagger-ui.html`
-- Ledger Service: `http://localhost:<port>/swagger-ui.html`
+Check each service's README or application config for exact paths and ports.
 
 ## Database
 
-The application uses MySQL for data persistence. Configure the database connection in the `application.properties` or `application.yml` file of each service.
+- Each service maintains its own schema (Database per Service pattern).
+- For local dev, use the MySQL container started by docker-compose or configure your own DB.
+- Ensure proper schema initialization (Flyway/Liquibase if present) or run provided SQL migrations.
 
-### Account Entity Features
-- **Optimistic Locking** - @Version field for conflict detection
-- **Balance Operations** - Safe debit/credit with retry mechanism
-- **Concurrent Safety** - Prevents over-withdrawal and duplicate transactions
+## Testing
 
-## Configuration
+- Unit tests: mvn test
+- Integration tests: configure testcontainers or a local Kafka/MySQL for integration runs.
+- Recommended tests:
+  - Concurrent debit/credit scenarios
+  - Transaction processing and idempotency
+  - Ledger reconciliation verification
 
-Each service includes configuration files for different environments:
-- `application.properties` or `application.yml` - Service-specific configuration
+## Build & Release
 
-Key properties to configure:
-- Database connection details (MySQL)
-- Eureka server URL
-- Kafka broker settings
-- Server port
-- Spring Security configurations
-
-## Development
-
-### Build
-
-```bash
-mvn clean install
-```
-
-### Run Tests
-
-```bash
-mvn test
-```
-
-Tests include:
-- Concurrent debit scenarios
-- Transaction processing validation
-- Ledger reconciliation verification
-
-### Generate JAR
-
-```bash
-mvn clean package
-```
+- Build JARs:
+  mvn clean package
+- Example Docker build:
+  docker build -t digital-wallet-account-service ./account-service
+  docker run -d -p 8081:8081 digital-wallet-account-service
 
 ## Deployment
 
-Services can be containerized and deployed using Docker:
+- Containerize each service and deploy to your orchestration platform (Kubernetes, Docker Swarm, ECS).
+- Ensure Kafka and Eureka (or an alternative service discovery) are available in your target environment.
+- Configure secure network policies for Kafka and DB access.
 
-```bash
-docker build -t digital-wallet-account-service ./account-service
-docker run -d -p 8081:8081 digital-wallet-account-service
-```
+## Troubleshooting
 
-## Architecture Patterns
-
-- **Microservices** - Independent, loosely coupled services
-- **Service Discovery** - Eureka for dynamic service registration
-- **Event-Driven** - Kafka for asynchronous inter-service communication
-- **Optimistic Locking** - Version-based conflict detection for concurrent updates
-- **Retry Pattern** - Automatic retry with bounded limits for transient failures
-- **Idempotency** - Ensures safe transaction processing on retries
-- **Scheduled Jobs** - Periodic reconciliation and maintenance tasks
-- **REST APIs** - Standard HTTP communication between services
-- **Database per Service** - Each service manages its own data
-
-## Recent Updates
-
-### Security Enhancements
-- Spring Security integration for Account Service
-
-### Reliability Improvements
-- Optimistic locking with automatic retry mechanism for concurrent balance updates
-- Support for multiple independent Kafka consumers
-- Idempotency key handling for transaction safety
-
-### Operational Features
-- Scheduled ledger reconciliation jobs
-- Enhanced Kafka producer/consumer configuration
-- Transaction event listeners across services
+- Kafka connection errors: verify spring.kafka.bootstrap-servers and ensure broker is reachable.
+- Database errors: check datasource URL, credentials, and that the DB is up.
+- Service registration issues: confirm Eureka server URL and that services can reach it.
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit pull requests or open issues for bugs and feature requests.
+Contributions are welcome. Suggested steps:
+1. Fork the repo
+2. Create a feature branch: git checkout -b feat/my-feature
+3. Commit changes with clear messages
+4. Open a Pull Request describing the change and why it's needed
+
+Please include tests for new features or bug fixes.
 
 ## License
 
-This project is currently unlicensed. See LICENSE file for more details.
+This project currently has no license specified. If you want a license added (MIT, Apache-2.0, GPLv3, etc.), tell me which one and I can add a LICENSE file and update this README.
 
 ## Contact
 
-For questions or support, please reach out to the repository owner: [@anikethate7](https://github.com/anikethate7)
+Repository owner: [@anikethate7](https://github.com/anikethate7)
 
----
+## Changelog / Recent Updates
 
-**Last Updated:** July 2026
-**Latest Commit:** Added Spring Security to Account Service
+- Last updated: 2026-07-13
+- Recent: Spring Security added to Account Service (see commit history for details)
