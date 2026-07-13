@@ -1,236 +1,203 @@
-# Digital Wallet
+# Digital Wallet — Microservices Fund Transfer System
 
-A microservices-based digital wallet application built with Spring Boot and Spring Cloud. This project demonstrates a scalable, distributed architecture for managing financial transactions and accounts with robust security and data consistency.
-
-## Project Overview
-
-Digital Wallet is a comprehensive financial management system designed with microservices architecture. It provides services for account management, transaction handling, and ledger maintenance with event-driven communication, optimistic locking for concurrent operations, and scheduled reconciliation jobs.
+A production-style digital wallet built with Spring Boot microservices, demonstrating distributed transaction handling (Saga pattern), idempotency, optimistic concurrency control, double-entry ledger accounting, and JWT-based security — patterns commonly used in real BFSI/payments systems.
 
 ## Architecture
 
-This project uses a **microservices architecture** with the following components:
+![Digital Wallet architecture](./docs/architecture.svg)
 
-### Core Services
+Each service owns its own database — no shared schema. Communication between services is synchronous (Feign, for balance/ownership checks) and asynchronous (Kafka, for the transfer saga).
 
-- **Account Service** - Manages user accounts, profiles, account information, and balance operations with Spring Security
-- **Transaction Service** - Handles financial transactions and payment processing with Kafka event listeners
-- **Ledger Service** - Maintains transaction ledger, financial records, and scheduled reconciliation jobs
-- **Eureka Server** - Service registry for microservice discovery
+Each service owns its own MySQL database (database-per-service pattern). Services communicate synchronously via Feign (balance checks, ownership checks) and asynchronously via Kafka (the transfer saga). All client traffic goes through the API Gateway, which resolves backend services via Eureka.
 
-### Technologies
+## Services
 
-**Framework & Language:**
+| Service | Port | Responsibility |
+|---|---|---|
+| Eureka Server | 8761 | Service discovery |
+| API Gateway | 8080 | Single entry point, routes requests to backend services |
+| Account Service | 8081 | Account CRUD, balance, debit/credit, authentication (JWT issuance) |
+| Transaction Service | 8082 | Transfer orchestration, saga state, idempotency, authorization |
+| Ledger Service | 8083 | Immutable double-entry ledger, reconciliation |
+
+## The Saga Flow
+
+Money transfer is handled as a choreographed saga across Kafka topics — not a distributed transaction — since each service owns its own database.
+
+**Happy path:**
+```
+1. POST /api/transactions -> Transaction Service saves Transfer (INITIATED), publishes TransferInitiated
+2. Account Service debits fromAccount -> publishes DebitCompleted
+3. Transaction Service consumes DebitCompleted -> publishes CreditRequested
+4. Account Service credits toAccount -> publishes CreditCompleted
+5. Transaction Service marks Transfer COMPLETED
+6. Ledger Service independently consumes DebitCompleted + CreditCompleted -> writes double-entry rows
+```
+
+**Failure/compensation path** (e.g. destination account frozen):
+```
+4. Account Service rejects credit -> publishes CreditFailed
+5. Transaction Service marks Transfer FAILED, publishes CompensateDebit
+6. Account Service reverses the original debit -> publishes DebitReversed
+```
+
+Result: no money is ever lost or stuck, even when a step downstream fails.
+
+## Key Design Decisions
+
+- **Choreography over orchestration** — each service reacts to events independently rather than a central coordinator directing every step.
+- **Idempotency keys** — every transfer request requires an `Idempotency-Key` header. A duplicate key with identical request data returns the original result; a duplicate key with different data returns `409 Conflict`.
+- **Optimistic locking (`@Version`)** — prevents over-withdrawal when two transfers hit the same account simultaneously. Verified with a concurrent JUnit test using two threads and a `CountDownLatch`; on conflict, the losing thread re-reads the fresh balance and correctly re-evaluates.
+- **Double-entry ledger, append-only** — every completed transfer writes exactly one DEBIT and one CREDIT row. A scheduled reconciliation job periodically verifies debits equal credits across all transactions.
+- **Separate Kafka consumer groups per service** — Transaction Service and Ledger Service both independently consume `debit-completed`/`credit-completed`; each needs its own consumer group so Kafka fans the event out to both rather than load-balancing between them.
+- **JWT authentication + cross-service authorization** — Account Service issues tokens; Transaction Service validates them and forwards them via a Feign `RequestInterceptor` so downstream calls to Account Service stay authenticated. A user can only initiate a transfer from an account they own — enforced server-side, not trusted from the client.
+- **API Gateway with service discovery routing** — clients only need to know one address (`localhost:8080`); the gateway resolves the correct backend service via Eureka (`lb://service-name`) rather than hardcoded hosts/ports.
+
+## Running Locally
+
+### Prerequisites
 - Java 17
-- Spring Boot 3.5.4
-- Spring Cloud 2025.0.0
-- Spring Security
+- Maven
+- Docker Desktop (for Kafka/Zookeeper, and for Testcontainers-based integration tests)
+- MySQL running locally (each service expects its own schema — see below)
 
-**Key Technologies:**
-- **Spring Data JPA** - ORM for database operations
-- **Spring Web** - REST API development
-- **Spring Security** - Authentication and authorization
-- **Netflix Eureka** - Service discovery
-- **Apache Kafka** - Event streaming and message broker with multiple consumer support
-- **MySQL** - Primary database
-- **Swagger/OpenAPI** - API documentation
-- **Lombok** - Boilerplate reduction
-- **Maven** - Dependency management
+### 1. Create the MySQL schemas
 
-**Infrastructure:**
-- Docker & Docker Compose
-- Zookeeper (Kafka coordination)
-- Kafka 7.5.0
-
-## Project Structure
-
-```
-digital-wallet/
-├── account-service/        # Account management microservice with Spring Security
-├── transaction-service/    # Transaction processing microservice with Kafka listeners
-├── ledger-service/        # Ledger and financial records service with reconciliation jobs
-├── eureka-server/         # Service discovery server
-└── docker-compose.yml     # Docker orchestration for local development
+```sql
+CREATE DATABASE account_db;
+CREATE DATABASE transaction_db;
+CREATE DATABASE ledger_db;
 ```
 
-## Key Features
+(Adjust to match whatever schema names your actual `application.yaml` files use.)
 
-### 🔐 Security
-- **Spring Security Integration** - Secured endpoints and authentication
-- Account-level security controls
-
-### 💰 Data Consistency & Reliability
-- **Optimistic Locking** - Prevents concurrent balance update conflicts with version-based detection
-- **Retry Mechanism** - Automatic retry logic (max 3 attempts) for handling concurrent modifications
-- **Idempotency Support** - Prevents duplicate transaction processing
-- **Concurrent Operation Handling** - Safe handling of simultaneous debit/credit operations
-
-### 📨 Event-Driven Architecture
-- **Kafka Event Streaming** - Asynchronous inter-service communication
-- **Multiple Consumer Support** - Independent consumers can process the same Kafka event
-- **Transaction Event Listeners** - Services react to transaction events in real-time
-
-### 🔄 Ledger Management
-- **Scheduled Reconciliation** - Automated ledger reconciliation jobs
-- **Transaction History** - Complete audit trail of all account activities
-- **Balance Tracking** - Real-time balance updates and verification
-
-## Prerequisites
-
-- Java 17+
-- Maven 3.6+
-- Docker & Docker Compose
-- MySQL 8.0+ (or use Docker)
-
-## Getting Started
-
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/anikethate7/digital-wallet.git
-cd digital-wallet
-```
-
-### 2. Start Infrastructure with Docker Compose
+### 2. Start infrastructure
 
 ```bash
 docker-compose up -d
 ```
+Starts Kafka and Zookeeper.
 
-This will start:
-- Zookeeper (port 2181)
-- Kafka (port 9092)
-
-### 3. Build the Services
+### 3. Start services, in order — waiting for each to fully start before the next
 
 ```bash
-mvn clean install
+cd eureka-server && ./mvnw spring-boot:run
 ```
-
-### 4. Run Individual Services
-
-Each service can be run independently:
+Confirm `http://localhost:8761` loads with zero instances, then:
 
 ```bash
-# Account Service (with Spring Security)
-cd account-service
-mvn spring-boot:run
-
-# Transaction Service (with Kafka listeners)
-cd ../transaction-service
-mvn spring-boot:run
-
-# Ledger Service (with reconciliation jobs)
-cd ../ledger-service
-mvn spring-boot:run
-
-# Eureka Server
-cd ../eureka-server
-mvn spring-boot:run
+cd account-service && ./mvnw spring-boot:run
+cd transaction-service && ./mvnw spring-boot:run
+cd ledger-service && ./mvnw spring-boot:run
+cd api-gateway && ./mvnw spring-boot:run
 ```
 
-## API Documentation
+### 4. Verify
 
-Once the services are running, access the Swagger/OpenAPI documentation at:
+Open `http://localhost:8761` — all four services should be registered and `UP`.
 
-- Account Service: `http://localhost:<port>/swagger-ui.html`
-- Transaction Service: `http://localhost:<port>/swagger-ui.html`
-- Ledger Service: `http://localhost:<port>/swagger-ui.html`
+> **Note on hostnames**: on some Windows/Docker setups, Eureka clients can auto-detect an unusable network hostname (e.g. a Docker-injected or Hyper-V virtual network name) instead of `localhost`. If services register under something other than `localhost:<port>`, add the following to each service's config and restart:
+> ```yaml
+> eureka:
+>   instance:
+>     prefer-ip-address: true
+>     ip-address: 127.0.0.1
+>     instance-id: ${spring.application.name}:${server.port}
+> spring:
+>   cloud:
+>     inetutils:
+>       default-hostname: localhost
+>       default-ip-address: 127.0.0.1
+> ```
 
-## Database
+## API Examples
 
-The application uses MySQL for data persistence. Configure the database connection in the `application.properties` or `application.yml` file of each service.
+All examples route through the API Gateway (`localhost:8080`). Individual service ports (8081/8082/8083) remain available for direct testing/debugging.
 
-### Account Entity Features
-- **Optimistic Locking** - @Version field for conflict detection
-- **Balance Operations** - Safe debit/credit with retry mechanism
-- **Concurrent Safety** - Prevents over-withdrawal and duplicate transactions
+**Register and log in**
+```bash
+curl -X POST http://localhost:8080/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username": "aniket", "password": "test1234"}'
 
-## Configuration
+curl -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "aniket", "password": "test1234"}'
+```
+Copy the `token` from the login response for the requests below.
 
-Each service includes configuration files for different environments:
-- `application.properties` or `application.yml` - Service-specific configuration
+**Create an account**
+```bash
+curl -X POST http://localhost:8080/api/accounts \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"accountType": "SAVINGS", "initialBalance": 1000.00, "currency": "INR"}'
+```
 
-Key properties to configure:
-- Database connection details (MySQL)
-- Eureka server URL
-- Kafka broker settings
-- Server port
-- Spring Security configurations
+**Transfer funds**
+```bash
+curl -X POST http://localhost:8080/api/transactions \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: unique-key-123" \
+  -d '{"fromAccountId": 1, "toAccountId": 2, "amount": 200.00}'
+```
 
-## Development
+**Check transfer status**
+```bash
+curl http://localhost:8080/api/transactions/{id} -H "Authorization: Bearer <token>"
+```
 
-### Build
+**View ledger entries for a transfer**
+```bash
+curl http://localhost:8080/api/ledger/transaction/{transactionId} -H "Authorization: Bearer <token>"
+```
+
+## Running Tests
 
 ```bash
-mvn clean install
+cd transaction-service
+
+# Fast unit tests (idempotency logic, ownership checks) - no Docker needed
+./mvnw test -Dtest=TransactionServiceIdempotencyTest
+
+# Integration test against real MySQL + Kafka via Testcontainers - Docker Desktop must be running
+./mvnw test -Dtest=TransactionSagaIntegrationTest
 ```
 
-### Run Tests
+## What's Implemented
 
-```bash
-mvn test
-```
+- [x] Service discovery via Eureka
+- [x] Synchronous balance/ownership checks via OpenFeign
+- [x] Kafka-based choreographed saga (debit -> credit -> complete)
+- [x] Compensation/rollback path for failed transfers
+- [x] Idempotency with duplicate-key detection and conflict handling
+- [x] Optimistic locking with bounded retry, verified under concurrent load
+- [x] Double-entry ledger with append-only entries
+- [x] Scheduled ledger reconciliation job
+- [x] Spring Security + JWT authentication and authorization
+- [x] Cross-service JWT propagation via Feign interceptor
+- [x] Unit tests (Mockito) and integration tests (Testcontainers)
+- [x] API Gateway with Eureka-based service discovery routing
 
-Tests include:
-- Concurrent debit scenarios
-- Transaction processing validation
-- Ledger reconciliation verification
+## Roadmap / Possible Extensions
 
-### Generate JAR
+- [ ] Notification Service (consume `TransferCompleted`/`TransferFailed`, send confirmations)
+- [ ] Centralized config server
+- [ ] Full docker-compose bringing up all application services (currently infra-only; app services run locally)
+- [ ] Observability: correlation IDs across services, Micrometer/Prometheus metrics
 
-```bash
-mvn clean package
-```
+## Tech Stack
 
-## Deployment
+Java 17, Spring Boot 3.5.4, Spring Cloud 2025.0.0 (Eureka, OpenFeign, Gateway), Apache Kafka, MySQL, Spring Security + JJWT, Testcontainers, Docker.
 
-Services can be containerized and deployed using Docker:
+## Key Bugs Found and Fixed Along the Way
 
-```bash
-docker build -t digital-wallet-account-service ./account-service
-docker run -d -p 8081:8081 digital-wallet-account-service
-```
+A few of the more instructive ones, worth being able to discuss in an interview:
 
-## Architecture Patterns
-
-- **Microservices** - Independent, loosely coupled services
-- **Service Discovery** - Eureka for dynamic service registration
-- **Event-Driven** - Kafka for asynchronous inter-service communication
-- **Optimistic Locking** - Version-based conflict detection for concurrent updates
-- **Retry Pattern** - Automatic retry with bounded limits for transient failures
-- **Idempotency** - Ensures safe transaction processing on retries
-- **Scheduled Jobs** - Periodic reconciliation and maintenance tasks
-- **REST APIs** - Standard HTTP communication between services
-- **Database per Service** - Each service manages its own data
-
-## Recent Updates
-
-### Security Enhancements
-- Spring Security integration for Account Service
-
-### Reliability Improvements
-- Optimistic locking with automatic retry mechanism for concurrent balance updates
-- Support for multiple independent Kafka consumers
-- Idempotency key handling for transaction safety
-
-### Operational Features
-- Scheduled ledger reconciliation jobs
-- Enhanced Kafka producer/consumer configuration
-- Transaction event listeners across services
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit pull requests or open issues for bugs and feature requests.
-
-## License
-
-This project is currently unlicensed. See LICENSE file for more details.
-
-## Contact
-
-For questions or support, please reach out to the repository owner: [@anikethate7](https://github.com/anikethate7)
-
----
-
-**Last Updated:** July 2026
-**Latest Commit:** Added Spring Security to Account Service
+- **Missing `transaction.setIdempotencyKey(...)` call** — idempotency key was never persisted, silently defeating duplicate-request detection until traced via direct DB inspection.
+- **`debit()` validated balance but never actually subtracted it** — caught via a concurrency test that unexpectedly left the balance unchanged.
+- **Kafka consumer group collisions** — Transaction Service and Ledger Service both consuming the same topics under the same `group.id`, causing one to silently starve; fixed by giving each service its own consumer group.
+- **`JsonDeserializer` type header mismatches** across services with different base packages — resolved via `USE_TYPE_INFO_HEADERS=false` and explicit `VALUE_DEFAULT_TYPE`.
+- **Eureka registering with non-`localhost` hostnames** (`host.docker.internal`, Hyper-V `.bbrouter`/`.mshome.net` addresses) due to Docker Desktop/WSL network interface injection on Windows — resolved via explicit `eureka.instance` overrides (`prefer-ip-address`, `ip-address`, `instance-id`) and `spring.cloud.inetutils` overrides.
+- **Orphaned Java processes** causing duplicate/competing Eureka registrations — resolved by identifying and killing stale processes before restarting cleanly.
