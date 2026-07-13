@@ -1,6 +1,7 @@
 package com.wallet.transaction_service.Service;
 
 import com.wallet.transaction_service.Client.AccountClient;
+import com.wallet.transaction_service.DTO.AccountResponse;
 import com.wallet.transaction_service.DTO.TransactionRequest;
 import com.wallet.transaction_service.DTO.TransactionResponse;
 import com.wallet.transaction_service.Entity.Transaction;
@@ -8,6 +9,7 @@ import com.wallet.transaction_service.Event.TransactionInitiatedEvent;
 import com.wallet.transaction_service.Exception.IdempotencyKeyReusedException;
 import com.wallet.transaction_service.Exception.InsufficientFundException;
 import com.wallet.transaction_service.Exception.TransactionNotFoundException;
+import com.wallet.transaction_service.Exception.UnauthorizedTransferException;
 import com.wallet.transaction_service.Repository.TransactionRepository;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
@@ -33,7 +35,7 @@ public class TransactionServiceImpl implements TransactionService {
     }
 
     @Override
-    public TransactionResponse createTransfer(TransactionRequest transactionRequest, String idempotencyKey) {
+    public TransactionResponse createTransfer(TransactionRequest transactionRequest, String idempotencyKey, Long authenticatedUserId) {
         Optional<Transaction> existing = transactionRepository.findByIdempotencyKey(idempotencyKey);
 
         if (existing.isPresent()) {
@@ -50,6 +52,12 @@ public class TransactionServiceImpl implements TransactionService {
                 throw new IdempotencyKeyReusedException(
                         "Idempotency key " + idempotencyKey + " was already used with different request data");
             }
+        }
+
+        AccountResponse fromAccount = accountClient.getAccountDetails(transactionRequest.getFromAccountId());
+        if (!fromAccount.getUserId().equals(authenticatedUserId)) {
+            throw new UnauthorizedTransferException(
+                    "You do not have permission to transfer from account " + transactionRequest.getFromAccountId());
         }
 
         BigDecimal balance = accountClient.getBalance(transactionRequest.getFromAccountId());

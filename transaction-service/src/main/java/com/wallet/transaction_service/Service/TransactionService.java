@@ -6,8 +6,7 @@ import org.springframework.stereotype.Service;
 
 
 public interface TransactionService {
-    TransactionResponse createTransfer(TransactionRequest transactionRequest, String idempotencyKey);
-    TransactionResponse getTransfer(Long id);
+    TransactionResponse createTransfer(TransactionRequest request, String idempotencyKey, Long authenticatedUserId);    TransactionResponse getTransfer(Long id);
     void markCompleted(Long transactionId);
     public void markFailed(Long transactionId);
 }

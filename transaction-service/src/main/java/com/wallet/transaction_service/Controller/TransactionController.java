@@ -17,9 +17,16 @@ public class TransactionController {
         this.transactionService = transactionService;
     }
 
+    // Controller
     @PostMapping
-    public ResponseEntity<TransactionResponse> createTransaction(@RequestBody TransactionRequest transactionRequest, @RequestHeader("Idempotency-Key") String idempotencyKey){
-        return ResponseEntity.accepted().body(transactionService.createTransfer(transactionRequest, idempotencyKey));
+    public ResponseEntity<TransactionResponse> createTransaction(
+            @RequestBody TransactionRequest request,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            jakarta.servlet.http.HttpServletRequest httpRequest) {
+
+        Long authenticatedUserId = (Long) httpRequest.getAttribute("userId");
+        TransactionResponse response = transactionService.createTransfer(request, idempotencyKey, authenticatedUserId);
+        return ResponseEntity.accepted().body(response);
     }
 
     @GetMapping("/{Id}")
